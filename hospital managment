@@ -1,0 +1,328 @@
+# hospital_cli.py
+# Simple CLI Hospital Management System
+# Language: Urdu/Hinglish prompts
+# No external libs required.
+
+from datetime import datetime, time, timedelta
+
+HOSPITAL_NAME = "Noori General Hospital"
+
+# Define medical fields and top 5 doctors per field (sample data)
+FIELDS = {
+    "General Medicine": [
+        {"name": "Dr. Ahmed Khan", "slots": [] , "bookings": []},
+        {"name": "Dr. Sara Malik", "slots": [] , "bookings": []},
+        {"name": "Dr. Omar Qureshi", "slots": [] , "bookings": []},
+        {"name": "Dr. Nadia Ali", "slots": [] , "bookings": []},
+        {"name": "Dr. Imran Raza", "slots": [] , "bookings": []},
+    ],
+    "Pediatrics": [
+        {"name": "Dr. Hina Javed", "slots": [] , "bookings": []},
+        {"name": "Dr. Bilal Shah", "slots": [] , "bookings": []},
+        {"name": "Dr. Ayesha Tariq", "slots": [] , "bookings": []},
+        {"name": "Dr. Faisal Mir", "slots": [] , "bookings": []},
+        {"name": "Dr. Samina Noor", "slots": [] , "bookings": []},
+    ],
+    "Cardiology": [
+        {"name": "Dr. Tariq Aziz", "slots": [] , "bookings": []},
+        {"name": "Dr. Mehreen Rauf", "slots": [] , "bookings": []},
+        {"name": "Dr. Zafar Iqbal", "slots": [] , "bookings": []},
+        {"name": "Dr. Raza Siddiqui", "slots": [] , "bookings": []},
+        {"name": "Dr. Laila Khan", "slots": [] , "bookings": []},
+    ],
+    "Orthopedics": [
+        {"name": "Dr. Asad Jamil", "slots": [] , "bookings": []},
+        {"name": "Dr. Maria Khan", "slots": [] , "bookings": []},
+        {"name": "Dr. Noman Sheikh", "slots": [] , "bookings": []},
+        {"name": "Dr. Hammad Ali", "slots": [] , "bookings": []},
+        {"name": "Dr. Zeenat Gul", "slots": [] , "bookings": []},
+    ],
+    "Dermatology": [
+        {"name": "Dr. Sana Iqbal", "slots": [] , "bookings": []},
+        {"name": "Dr. Rizwan Azam", "slots": [] , "bookings": []},
+        {"name": "Dr. Mahnoor Aslam", "slots": [] , "bookings": []},
+        {"name": "Dr. Qasim Naveed", "slots": [] , "bookings": []},
+        {"name": "Dr. Farah Jameel", "slots": [] , "bookings": []},
+    ],
+    "ENT": [
+        {"name": "Dr. Zoya Khan", "slots": [] , "bookings": []},
+        {"name": "Dr. Adil Raza", "slots": [] , "bookings": []},
+        {"name": "Dr. Nida Shah", "slots": [] , "bookings": []},
+        {"name": "Dr. Yasir Malik", "slots": [] , "bookings": []},
+        {"name": "Dr. Kiran Javed", "slots": [] , "bookings": []},
+    ],
+    "Gynecology": [
+        {"name": "Dr. Maria Zahid", "slots": [] , "bookings": []},
+        {"name": "Dr. Shabnam Ali", "slots": [] , "bookings": []},
+        {"name": "Dr. Rabia Khan", "slots": [] , "bookings": []},
+        {"name": "Dr. Noreen Aziz", "slots": [] , "bookings": []},
+        {"name": "Dr. Sana Bukhari", "slots": [] , "bookings": []},
+    ],
+    "Psychiatry": [
+        {"name": "Dr. Kamran Hashmi", "slots": [] , "bookings": []},
+        {"name": "Dr. Areeba Fatima", "slots": [] , "bookings": []},
+        {"name": "Dr. Danish Iqbal", "slots": [] , "bookings": []},
+        {"name": "Dr. Mehwish Tariq", "slots": [] , "bookings": []},
+        {"name": "Dr. Omer Junaid", "slots": [] , "bookings": []},
+    ],
+}
+
+# Generate standard slots for each doctor (example: 09:00-12:00 every 30 min, 15:00-17:00 every 30 min)
+def generate_slots():
+    morning_start = time(9, 0)
+    morning_end = time(12, 0)
+    afternoon_start = time(15, 0)
+    afternoon_end = time(17, 0)
+
+    def make_slots(start, end, interval_minutes=30):
+        slots = []
+        current = datetime.combine(datetime.today(), start)
+        end_dt = datetime.combine(datetime.today(), end)
+        while current + timedelta(minutes=interval_minutes) <= end_dt + timedelta(seconds=1):
+            s = current.time()
+            e = (current + timedelta(minutes=interval_minutes)).time()
+            slots.append((s, e))
+            current += timedelta(minutes=interval_minutes)
+        return slots
+
+    for field, doctors in FIELDS.items():
+        for doc in doctors:
+            doc["slots"] = make_slots(morning_start, morning_end) + make_slots(afternoon_start, afternoon_end)
+            doc["bookings"] = []  # each booking: dict with patient info and slot
+
+generate_slots()
+
+# Helper display functions
+def fmt_time(t):
+    return t.strftime("%H:%M")
+
+def display_fields():
+    print("\nAvailable Medical Fields:")
+    for i, f in enumerate(FIELDS.keys(), 1):
+        print(f"  {i}. {f}")
+
+def display_doctors(field_name):
+    doctors = FIELDS[field_name]
+    print(f"\nTop doctors in {field_name}:")
+    for i, d in enumerate(doctors, 1):
+        booked = len(d["bookings"])
+        print(f"  {i}. {d['name']}  (Booked patients: {booked}/5)")
+
+def display_available_slots(doc):
+    print(f"\nAvailable slots for {doc['name']}:")
+    available = []
+    now = datetime.now().time()
+    for idx, (s, e) in enumerate(doc["slots"], 1):
+        # check if this slot is already booked
+        taken = any(b['slot'] == (s, e) for b in doc["bookings"])
+        if not taken:
+            available.append((idx, s, e))
+            print(f"  {idx}. {fmt_time(s)} - {fmt_time(e)}")
+    if not available:
+        print("  No slots available for this doctor.")
+    return available
+
+def find_doctors_available_now():
+    """Return list of (field, doctor) who have a slot encompassing current time and not booked."""
+    now_dt = datetime.now()
+    now_t = now_dt.time()
+    result = []
+    for field, doctors in FIELDS.items():
+        for doc in doctors:
+            for (s, e) in doc["slots"]:
+                # check slot contains now
+                start_dt = datetime.combine(now_dt.date(), s)
+                end_dt = datetime.combine(now_dt.date(), e)
+                if start_dt <= now_dt <= end_dt:
+                    # see if slot booked
+                    if not any(b['slot'] == (s, e) for b in doc["bookings"]):
+                        if len(doc["bookings"]) < 5:
+                            result.append((field, doc, (s, e)))
+    return result
+
+def book_slot(doc, slot_tuple, patient):
+    # check doctor booking limit
+    if len(doc["bookings"]) >= 5:
+        return False, "Doctor ne already 5 patients accept kar liye hain."
+    # check if slot already booked
+    if any(b['slot'] == slot_tuple for b in doc["bookings"]):
+        return False, "Yeh slot pehle hi book ho chuka hai."
+    # perform booking
+    booking = {
+        "patient": patient,
+        "slot": slot_tuple,
+        "time_booked": datetime.now()
+    }
+    doc["bookings"].append(booking)
+    return True, booking
+
+# Main program flow
+def main():
+    print("="*60)
+    print(f"Welcome to {HOSPITAL_NAME} (CLI Booking System)")
+    print("="*60)
+
+    # Patient info
+    patient = {}
+    patient['name'] = input("Patient ka naam (full): ").strip() or "Unknown"
+    # age validation
+    while True:
+        age_raw = input("Patient ki umar (saalon mein): ").strip()
+        try:
+            age = int(age_raw)
+            if age < 0:
+                print("Ghalat umar. Dobara enter karein.")
+                continue
+            patient['age'] = age
+            break
+        except ValueError:
+            print("Please sirf numbers mein umar dalein.")
+    patient['contact'] = input("Contact number (optional): ").strip()
+
+    # other necessary info (simple)
+    patient['gender'] = input("Gender (M/F/Other) (optional): ").strip()
+    patient['notes'] = input("Koi aur zaroori maloomat (ailments, allergies) (optional): ").strip()
+
+    # choose field
+    display_fields()
+    while True:
+        choice = input("\nAapko kis field ke doctor ka appointment chahiye? (number dalen): ").strip()
+        try:
+            idx = int(choice)
+            if 1 <= idx <= len(FIELDS):
+                selected_field = list(FIELDS.keys())[idx-1]
+                break
+            else:
+                print("Invalid selection. Dobara try karein.")
+        except ValueError:
+            print("Number dalein.")
+
+    # Emergency check
+    em = input("\nKya emergency hai? (y/n): ").strip().lower()
+    if em == 'y' or em == 'yes':
+        now_avail = find_doctors_available_now()
+        # Filter to only doctors of selected field first (prefer same field)
+        same_field_now = [t for t in now_avail if t[0] == selected_field]
+        if same_field_now:
+            print("\nEmergency: turant available doctors in your field:")
+            for i, (fld, doc, slot) in enumerate(same_field_now, 1):
+                s, e = slot
+                print(f"  {i}. {doc['name']} - {fmt_time(s)} to {fmt_time(e)}")
+            pick = input("Kis doctor ko prefer karenge? (number ya '0' to see all): ").strip()
+            try:
+                p = int(pick)
+                if p == 0:
+                    pass
+                elif 1 <= p <= len(same_field_now):
+                    # book that slot
+                    _, doc, slot = same_field_now[p-1]
+                    success, res = book_slot(doc, slot, patient)
+                    if success:
+                        print("\n--- Appointment Confirmed (Emergency) ---")
+                        print(f"Doctor: {doc['name']}")
+                        print(f"Field: {selected_field}")
+                        print(f"Slot: {fmt_time(slot[0])} - {fmt_time(slot[1])}")
+                        print("Status: Emergency booking")
+                        print("----------------------------------------")
+                        final_message(patient, selected_field, doc, slot)
+                        return
+                    else:
+                        print("Booking failed:", res)
+                else:
+                    print("Invalid selection, continuing to show general options.")
+            except ValueError:
+                print("Invalid input, continuing.")
+        # If no same-field doctor, show any available doctor hospital-wide
+        if not same_field_now:
+            if now_avail:
+                print("\nEmergency: koi doctors abhi available hain (different fields):")
+                for i, (fld, doc, slot) in enumerate(now_avail, 1):
+                    s, e = slot
+                    print(f"  {i}. {doc['name']} ({fld}) - {fmt_time(s)} to {fmt_time(e)}")
+                pick = input("Kis doctor ko prefer karenge? (number ya '0' to continue normal flow): ").strip()
+                try:
+                    p = int(pick)
+                    if p == 0:
+                        print("Ok, normal booking flow shuru karte hain.")
+                    elif 1 <= p <= len(now_avail):
+                        _, doc, slot = now_avail[p-1]
+                        success, res = book_slot(doc, slot, patient)
+                        if success:
+                            print("\n--- Appointment Confirmed (Emergency) ---")
+                            print(f"Doctor: {doc['name']} ({_})")
+                            print(f"Slot: {fmt_time(slot[0])} - {fmt_time(slot[1])}")
+                            print("Status: Emergency booking")
+                            print("----------------------------------------")
+                            final_message(patient, selected_field, doc, slot)
+                            return
+                        else:
+                            print("Booking failed:", res)
+                    else:
+                        print("Invalid selection, continuing.")
+                except ValueError:
+                    print("Invalid input, continuing.")
+            else:
+                print("\nAfsos! Filhal koi doctor immediate available nahi hai. Normal booking kar lein.")
+    # Normal booking flow
+    # Show doctors in selected field
+    while True:
+        display_doctors(selected_field)
+        choice = input("\nKaunsa doctor choose karna chahenge? (number): ").strip()
+        try:
+            d_idx = int(choice)
+            doctors = FIELDS[selected_field]
+            if 1 <= d_idx <= len(doctors):
+                selected_doc = doctors[d_idx-1]
+                # show slots
+                if len(selected_doc["bookings"]) >= 5:
+                    print("Maazrat, is doctor ki limit (5 patients) poori ho chuki hai. Kisi aur doctor ko select karein.")
+                    continue
+                available = display_available_slots(selected_doc)
+                if not available:
+                    print("Koi available slot nahi. Kisi aur doctor try karein.")
+                    continue
+                # choose slot
+                slot_choice = input("\nSlot number choose karein (jo upar show hua hai): ").strip()
+                try:
+                    s_choice = int(slot_choice)
+                    # find tuple for chosen slot index in doctor's full slots list
+                    chosen_slot = None
+                    for idx, s, e in available:
+                        if idx == s_choice:
+                            chosen_slot = (s, e)
+                            break
+                    if not chosen_slot:
+                        print("Invalid slot number. Dobara try karein.")
+                        continue
+                    # confirm booking
+                    success, res = book_slot(selected_doc, chosen_slot, patient)
+                    if success:
+                        print("\n--- Appointment Confirmed ---")
+                        print(f"Patient: {patient['name']}")
+                        print(f"Doctor: {selected_doc['name']}")
+                        print(f"Field: {selected_field}")
+                        print(f"Slot: {fmt_time(chosen_slot[0])} - {fmt_time(chosen_slot[1])}")
+                        print("----------------------------------------")
+                        final_message(patient, selected_field, selected_doc, chosen_slot)
+                        return
+                    else:
+                        print("Booking failed:", res)
+                except ValueError:
+                    print("Number dalein for slot.")
+            else:
+                print("Invalid doctor selection.")
+        except ValueError:
+            print("Please enter a number corresponding to the doctor.")
+
+def final_message(patient, field, doctor, slot):
+    print("\n\nThank you! Aapka appointment confirm ho gaya.")
+    print(f"Patient: {patient['name']} | Age: {patient.get('age')} | Contact: {patient.get('contact')}")
+    print(f"Doctor: {doctor['name']} ({field})")
+    print(f"Slot: {fmt_time(slot[0])} - {fmt_time(slot[1])}")
+    print("\n--- Aik chhoti si motivational baat ---")
+    print("Zindagi mein sehat sab se bari daulat hai. Khud ka khayal rakhein, doctor ki advice follow karein, aur apne aap par yakeen rakhein.")
+    print("\nAllah Hafiz. Shukriya for using", HOSPITAL_NAME)
+    print("="*60)
+
+if __name__ == "__main__":
+    main()
